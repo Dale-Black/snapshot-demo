@@ -26,7 +26,7 @@ concurrency:
 
 env:
   SNAPSHOT_WT_REF: main # WasmTarget.jl ref
-  SNAPSHOT_PI_REF: snapshot-v0 # PlutoIslands.jl ref — carries the optimize=:size export kwarg (PR'd to main)
+  SNAPSHOT_PI_REF: main # PlutoIslands.jl ref (optimize=:size export kwarg merged via #11)
   BINARYEN_VERSION: version_125 # wasm-opt + wasm-merge
   WASMTOOLS_VERSION: 1.244.0 # validation gate
   SNAPSHOT_OPTIMIZE: size # wasm-opt level: size (-Os) | speed (-O3) | debug | off
