@@ -114,6 +114,10 @@ jobs:
           SNAPSHOT_INGEST_URL: ${{ secrets.SNAPSHOT_INGEST_URL }}
           SNAPSHOT_INGEST_TOKEN: ${{ secrets.SNAPSHOT_INGEST_TOKEN }}
         run: |
+          if [ -z "$SNAPSHOT_INGEST_URL" ]; then
+            echo "::notice::SNAPSHOT_INGEST_URL not set — bundles compiled + attested; skipping publish."
+            exit 0
+          fi
           owner="${GITHUB_REPOSITORY%%/*}"
           reponame="${GITHUB_REPOSITORY##*/}"
           jq -c '.notebooks[] | select(.status=="success")' _stage/manifest.json | while read -r nb; do
