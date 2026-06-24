@@ -1,0 +1,136 @@
+# Snapshot — notarize interactive notebooks.
+#
+# Runs in the USER's repo (public repo = unlimited free Actions). Compiles every
+# Pluto notebook to a self-contained WasmGC island bundle, attaches a signed
+# build-provenance attestation, and publishes the bundle to Snapshot's host.
+#
+# v0: this file is dropped into a repo by hand + two Actions secrets are set:
+#   SNAPSHOT_INGEST_URL    e.g. https://snapshot.<account>.workers.dev
+#   SNAPSHOT_INGEST_TOKEN  the ingest bearer token
+# v1+: the Snapshot GitHub App writes this file automatically on "enable".
+name: Snapshot — notarize interactive notebooks
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # OIDC — required to mint the provenance attestation
+  attestations: write # actions/attest-build-provenance
+
+concurrency:
+  group: snapshot-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SNAPSHOT_WT_REF: main # WasmTarget.jl ref
+  SNAPSHOT_PI_REF: snapshot-v0 # PlutoIslands.jl ref — carries the optimize=:size export kwarg (PR'd to main)
+  BINARYEN_VERSION: version_125 # wasm-opt + wasm-merge
+  WASMTOOLS_VERSION: 1.244.0 # validation gate
+  SNAPSHOT_OPTIMIZE: size # wasm-opt level: size (-Os) | speed (-O3) | debug | off
+
+jobs:
+  notarize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout notebooks repo
+        uses: actions/checkout@v4
+        with:
+          path: repo
+
+      # PlutoIslands pins WasmTarget via [sources] {path = "../WasmTarget.jl"};
+      # clone it to the expected sibling path so instantiate resolves the pin.
+      - name: Checkout WasmTarget.jl (sibling)
+        uses: actions/checkout@v4
+        with:
+          repository: GroupTherapyOrg/WasmTarget.jl
+          ref: ${{ env.SNAPSHOT_WT_REF }}
+          path: WasmTarget.jl
+
+      - name: Checkout PlutoIslands.jl
+        uses: actions/checkout@v4
+        with:
+          repository: GroupTherapyOrg/PlutoIslands.jl
+          ref: ${{ env.SNAPSHOT_PI_REF }}
+          path: PlutoIslands.jl
+
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: "1.12"
+      - uses: julia-actions/cache@v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Binaryen (wasm-opt, wasm-merge)
+        run: |
+          curl -fsSL "https://github.com/WebAssembly/binaryen/releases/download/${BINARYEN_VERSION}/binaryen-${BINARYEN_VERSION}-x86_64-linux.tar.gz" | tar -xz
+          echo "$PWD/binaryen-${BINARYEN_VERSION}/bin" >> "$GITHUB_PATH"
+
+      - name: Install wasm-tools (validation gate)
+        run: |
+          curl -fsSL "https://github.com/bytecodealliance/wasm-tools/releases/download/v${WASMTOOLS_VERSION}/wasm-tools-${WASMTOOLS_VERSION}-x86_64-linux.tar.gz" | tar -xz
+          echo "$PWD/wasm-tools-${WASMTOOLS_VERSION}-x86_64-linux" >> "$GITHUB_PATH"
+
+      - name: Verify toolchain
+        run: |
+          wasm-opt --version
+          wasm-tools --version
+          node --version
+
+      - name: Instantiate engine environment
+        run: |
+          julia --project=PlutoIslands.jl -e '
+            using Pkg
+            Pkg.Registry.add("General")
+            Pkg.instantiate()'
+
+      - name: Fetch Snapshot export driver
+        run: curl -fsSL "https://raw.githubusercontent.com/GroupTherapyOrg/snapshot/main/ci/export.jl" -o export.jl
+
+      - name: Compile notebooks → islands (wasm-opt'd + verified)
+        run: julia --project=PlutoIslands.jl export.jl repo _stage
+
+      - name: Package each bundle as a zip
+        run: |
+          mkdir -p _zips
+          jq -r '.notebooks[] | select(.status=="success") | .slug' _stage/manifest.json | while read -r slug; do
+            ( cd "_stage/$slug" && zip -qr "$GITHUB_WORKSPACE/_zips/$slug.zip" . )
+            echo "packaged $slug"
+          done
+          ls -la _zips || (echo "no successful bundles" && exit 1)
+
+      # Free, verifiable provenance for every bundle (sigstore-backed).
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: "_zips/*.zip"
+
+      - name: Publish bundles to Snapshot
+        env:
+          SNAPSHOT_INGEST_URL: ${{ secrets.SNAPSHOT_INGEST_URL }}
+          SNAPSHOT_INGEST_TOKEN: ${{ secrets.SNAPSHOT_INGEST_TOKEN }}
+        run: |
+          owner="${GITHUB_REPOSITORY%%/*}"
+          reponame="${GITHUB_REPOSITORY##*/}"
+          jq -c '.notebooks[] | select(.status=="success")' _stage/manifest.json | while read -r nb; do
+            slug=$(echo "$nb"  | jq -r '.slug')
+            index=$(echo "$nb" | jq -r '.index')
+            zip="_zips/$slug.zip"
+            digest=$(sha256sum "$zip" | awk '{print $1}')
+            echo "publishing $slug (sha256:$digest)"
+            curl -fsS -X POST "${SNAPSHOT_INGEST_URL%/}/ingest" \
+              -H "authorization: Bearer ${SNAPSHOT_INGEST_TOKEN}" \
+              -H "x-snapshot-owner: ${owner}" \
+              -H "x-snapshot-repo: ${reponame}" \
+              -H "x-snapshot-notebook: ${slug}" \
+              -H "x-snapshot-commit: ${GITHUB_SHA}" \
+              -H "x-snapshot-index: ${index}" \
+              -H "x-snapshot-attestation: sha256:${digest}" \
+              -H "content-type: application/zip" \
+              --data-binary "@${zip}"
+            echo
+          done
