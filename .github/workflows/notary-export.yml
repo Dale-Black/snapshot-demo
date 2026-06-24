@@ -88,11 +88,11 @@ jobs:
             Pkg.Registry.add("General")
             Pkg.instantiate()'
 
-      - name: Fetch Snapshot export driver
-        run: curl -fsSL "https://raw.githubusercontent.com/GroupTherapyOrg/snapshot/main/ci/export.jl" -o export.jl
-
       - name: Compile notebooks → islands (wasm-opt'd + verified)
-        run: julia --project=PlutoIslands.jl export.jl repo _stage
+        # The export driver is vendored in the repo at .snapshot/export.jl, so
+        # CI needs nothing from the private Snapshot platform repo. The Snapshot
+        # GitHub App writes this file (+ the workflow) into a repo on "enable".
+        run: julia --project=PlutoIslands.jl repo/.snapshot/export.jl repo _stage
 
       - name: Package each bundle as a zip
         run: |
