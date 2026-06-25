@@ -2,7 +2,7 @@
 # v0.20.28
 
 #> [frontmatter]
-#> title = "Interactive Slider"
+#> title = "Combined Widgets"
 
 using Markdown
 using InteractiveUtils
@@ -19,29 +19,29 @@ macro bind(def, element)
     #! format: on
 end
 
-# ╔═╡ aa000001-0000-4000-8000-000000000001
+# ╔═╡ bb000001-0000-4000-8000-000000000001
 import AbstractPlutoDingetjes.Bonds
 
-# ╔═╡ aa000002-0000-4000-8000-000000000002
+# ╔═╡ bb000002-0000-4000-8000-000000000002
 begin
-	struct CoolSlider
-		max
+	# combine()-shaped widget: multiple <input> children, the client sends a
+	# Vector of child values, transform_value reshapes it server-side. No
+	# usable initial_value → the pipeline must introspect the rendered html
+	# (and the defining cell below SUPPRESSES its output with `;`, so the html
+	# can only come from the workspace's bond registry).
+	struct DuoWidget end
+	function Base.show(io::IO, ::MIME"text/html", ::DuoWidget)
+		write(io, "<span><input type=color value=\"#aabbcc\"><input type=range min=1 max=3 value=2></span>")
 	end
-	function Base.show(io::IO, ::MIME"text/html", s::CoolSlider)
-		write(io, "<input type=range value=1 min=1 max=$(s.max)>")
-	end
-	Bonds.initial_value(::CoolSlider) = 1
-	Bonds.possible_values(s::CoolSlider) = 1:s.max
+	Bonds.initial_value(::DuoWidget) = missing
+	Bonds.transform_value(::DuoWidget, raw) = raw === missing ? missing : (color=string(raw[1]), n=Int(raw[2]))
 end
 
-# ╔═╡ aa000003-0000-4000-8000-000000000003
-@bind x CoolSlider(100)
+# ╔═╡ bb000003-0000-4000-8000-000000000003
+duo_widget = @bind duo DuoWidget();
 
-# ╔═╡ aa000004-0000-4000-8000-000000000004
-y = x^2
-
-# ╔═╡ aa000005-0000-4000-8000-000000000005
-md"**y** is $(y)"
+# ╔═╡ bb000004-0000-4000-8000-000000000004
+duo === missing ? "color #aabbcc n 2" : "color $(duo.color) n $(duo.n)"
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -67,10 +67,9 @@ version = "1.4.0"
 """
 
 # ╔═╡ Cell order:
-# ╠═aa000001-0000-4000-8000-000000000001
-# ╟─aa000002-0000-4000-8000-000000000002
-# ╠═aa000003-0000-4000-8000-000000000003
-# ╠═aa000004-0000-4000-8000-000000000004
-# ╠═aa000005-0000-4000-8000-000000000005
+# ╠═bb000001-0000-4000-8000-000000000001
+# ╠═bb000002-0000-4000-8000-000000000002
+# ╠═bb000003-0000-4000-8000-000000000003
+# ╠═bb000004-0000-4000-8000-000000000004
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

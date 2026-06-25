@@ -1,4 +1,4 @@
-name: Snapshot — notarize interactive notebooks
+name: Snapshot — publish interactive notebooks
 on:
   push:
     branches: [main, master]
@@ -18,7 +18,7 @@ env:
   SNAPSHOT_OPTIMIZE: size
   SNAPSHOT_INGEST_URL: https://snapshot.djblack.workers.dev
 jobs:
-  notarize:
+  publish:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout notebooks repo
@@ -45,38 +45,37 @@ jobs:
           echo "$PWD/wasm-tools-${WASMTOOLS_VERSION}-x86_64-linux" >> "$GITHUB_PATH"
       - name: Instantiate engine
         run: julia --project=PlutoIslands.jl -e 'using Pkg; Pkg.Registry.add("General"); Pkg.instantiate()'
-      - name: Fetch Snapshot export driver
-        run: curl -fsSL "${SNAPSHOT_INGEST_URL%/}/ci/export.jl" -o export.jl
-      - name: Compile notebooks → islands (wasm-opt'd + verified)
-        run: julia --project=PlutoIslands.jl export.jl repo _stage
-      - name: Package each bundle as a zip
+      - name: Fetch Snapshot driver + collection builder
         run: |
-          mkdir -p _zips
-          jq -r '.notebooks[] | select(.status=="success") | .slug' _stage/manifest.json | while read -r slug; do
-            ( cd "_stage/$slug" && zip -qr "$GITHUB_WORKSPACE/_zips/$slug.zip" . ); echo "packaged $slug"
-          done
-          ls -la _zips || (echo "no successful bundles" && exit 1)
+          curl -fsSL "${SNAPSHOT_INGEST_URL%/}/ci/export.jl" -o export.jl
+          curl -fsSL "${SNAPSHOT_INGEST_URL%/}/ci/collection.jl" -o collection.jl
+      - name: Build collection site (compile notebooks, wasm-opt'd + verified)
+        run: julia --project=PlutoIslands.jl export.jl repo _stage
+      - name: Package the site as one zip
+        run: |
+          ok=$(jq -r '.ok' _stage/manifest.json)
+          [ "${ok:-0}" -gt 0 ] || { echo "no notebooks published"; exit 1; }
+          ( cd _stage && zip -qr "$GITHUB_WORKSPACE/site.zip" . )
+          ls -la site.zip
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v2
-        with: { subject-path: "_zips/*.zip" }
-      - name: Publish bundles to Snapshot (OIDC)
+        with: { subject-path: "site.zip" }
+      - name: Publish site to Snapshot (OIDC)
         run: |
           OIDC=$(curl -fsSL -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=snapshot" | jq -r '.value')
           owner="${GITHUB_REPOSITORY%%/*}"; reponame="${GITHUB_REPOSITORY##*/}"
-          jq -c '.notebooks[] | select(.status=="success")' _stage/manifest.json | while read -r nb; do
-            slug=$(echo "$nb"  | jq -r '.slug'); index=$(echo "$nb" | jq -r '.index')
-            zip="_zips/$slug.zip"; digest=$(sha256sum "$zip" | awk '{print $1}')
-            echo "publishing $slug (sha256:$digest)"
-            curl -fsS -X POST "${SNAPSHOT_INGEST_URL%/}/ingest" \
-              -H "authorization: Bearer ${OIDC}" \
-              -H "x-snapshot-auth: oidc" \
-              -H "x-snapshot-owner: ${owner}" \
-              -H "x-snapshot-repo: ${reponame}" \
-              -H "x-snapshot-notebook: ${slug}" \
-              -H "x-snapshot-commit: ${GITHUB_SHA}" \
-              -H "x-snapshot-index: ${index}" \
-              -H "x-snapshot-attestation: sha256:${digest}" \
-              -H "content-type: application/zip" \
-              --data-binary "@${zip}"
-            echo
-          done
+          slug=$(jq -r '.slug' _stage/manifest.json); index=$(jq -r '.index' _stage/manifest.json)
+          digest=$(sha256sum site.zip | awk '{print $1}')
+          echo "publishing $slug (sha256:$digest)"
+          curl -fsS -X POST "${SNAPSHOT_INGEST_URL%/}/ingest" \
+            -H "authorization: Bearer ${OIDC}" \
+            -H "x-snapshot-auth: oidc" \
+            -H "x-snapshot-owner: ${owner}" \
+            -H "x-snapshot-repo: ${reponame}" \
+            -H "x-snapshot-notebook: ${slug}" \
+            -H "x-snapshot-kind: collection" \
+            -H "x-snapshot-commit: ${GITHUB_SHA}" \
+            -H "x-snapshot-index: ${index}" \
+            -H "x-snapshot-attestation: sha256:${digest}" \
+            -H "content-type: application/zip" \
+            --data-binary "@site.zip"

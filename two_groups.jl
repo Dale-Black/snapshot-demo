@@ -2,7 +2,7 @@
 # v0.20.28
 
 #> [frontmatter]
-#> title = "Interactive Slider"
+#> title = "Comparing Two Groups"
 
 using Markdown
 using InteractiveUtils
@@ -19,29 +19,35 @@ macro bind(def, element)
     #! format: on
 end
 
-# ╔═╡ aa000001-0000-4000-8000-000000000001
+# ╔═╡ bb000001-0000-4000-8000-000000000001
 import AbstractPlutoDingetjes.Bonds
 
-# ╔═╡ aa000002-0000-4000-8000-000000000002
+# ╔═╡ bb000002-0000-4000-8000-000000000002
 begin
-	struct CoolSlider
+	struct TinySlider
 		max
 	end
-	function Base.show(io::IO, ::MIME"text/html", s::CoolSlider)
+	function Base.show(io::IO, ::MIME"text/html", s::TinySlider)
 		write(io, "<input type=range value=1 min=1 max=$(s.max)>")
 	end
-	Bonds.initial_value(::CoolSlider) = 1
-	Bonds.possible_values(s::CoolSlider) = 1:s.max
+	Bonds.initial_value(::TinySlider) = 1
+	Bonds.possible_values(s::TinySlider) = 1:s.max
 end
 
-# ╔═╡ aa000003-0000-4000-8000-000000000003
-@bind x CoolSlider(100)
+# ╔═╡ bb000003-0000-4000-8000-000000000003
+@bind x TinySlider(20)
 
-# ╔═╡ aa000004-0000-4000-8000-000000000004
-y = x^2
+# ╔═╡ bb000004-0000-4000-8000-000000000004
+doubled = 2x
 
-# ╔═╡ aa000005-0000-4000-8000-000000000005
-md"**y** is $(y)"
+# ╔═╡ bb000005-0000-4000-8000-000000000005
+md"doubled is $(doubled), tripled is $(3x)"
+
+# ╔═╡ bb000006-0000-4000-8000-000000000006
+@bind z TinySlider(10)
+
+# ╔═╡ bb000007-0000-4000-8000-000000000007
+collect(1:z)
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -67,10 +73,12 @@ version = "1.4.0"
 """
 
 # ╔═╡ Cell order:
-# ╠═aa000001-0000-4000-8000-000000000001
-# ╟─aa000002-0000-4000-8000-000000000002
-# ╠═aa000003-0000-4000-8000-000000000003
-# ╠═aa000004-0000-4000-8000-000000000004
-# ╠═aa000005-0000-4000-8000-000000000005
+# ╠═bb000001-0000-4000-8000-000000000001
+# ╟─bb000002-0000-4000-8000-000000000002
+# ╠═bb000003-0000-4000-8000-000000000003
+# ╠═bb000004-0000-4000-8000-000000000004
+# ╠═bb000005-0000-4000-8000-000000000005
+# ╠═bb000006-0000-4000-8000-000000000006
+# ╠═bb000007-0000-4000-8000-000000000007
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
