@@ -1,4 +1,4 @@
-name: Snapshot — publish interactive notebooks
+name: Snapshot — build & publish
 on:
   push:
     branches: [main, master]
@@ -16,7 +16,7 @@ env:
   BINARYEN_VERSION: version_125
   WASMTOOLS_VERSION: 1.244.0
   SNAPSHOT_OPTIMIZE: size
-  SNAPSHOT_INGEST_URL: https://snapshot.djblack.workers.dev
+  SNAPSHOT_INGEST_URL: https://snapshot.show
 jobs:
   publish:
     runs-on: ubuntu-latest
