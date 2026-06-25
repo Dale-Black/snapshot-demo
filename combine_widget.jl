@@ -19,6 +19,19 @@ macro bind(def, element)
     #! format: on
 end
 
+# ╔═╡ bb000000-0000-4000-8000-000000000000
+md"""
+> ⚠️ **Intentionally not interactive — yet.**
+>
+> This notebook uses a `combine()`‑shaped `@bind` widget (two `<input>`s feeding one
+> bound value). **WasmTarget can't compile that to WebAssembly yet**, so Snapshot
+> publishes it as a **static snapshot** and labels it `limited` in the sidebar.
+>
+> It's here on purpose — a live marker of the current edge of what compiles. The bound
+> cell below shows its default value with a clear "not interactive in this export" note,
+> instead of pretending to work.
+"""
+
 # ╔═╡ bb000001-0000-4000-8000-000000000001
 import AbstractPlutoDingetjes.Bonds
 
@@ -67,6 +80,7 @@ version = "1.4.0"
 """
 
 # ╔═╡ Cell order:
+# ╟─bb000000-0000-4000-8000-000000000000
 # ╠═bb000001-0000-4000-8000-000000000001
 # ╠═bb000002-0000-4000-8000-000000000002
 # ╠═bb000003-0000-4000-8000-000000000003
