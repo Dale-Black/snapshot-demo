@@ -21,16 +21,39 @@ end
 
 # ╔═╡ bb000000-0000-4000-8000-000000000000
 md"""
-> ⚠️ **Intentionally not interactive — yet.**
+> ⚠️ **One cell works, one doesn't — on purpose.**
 >
-> This notebook uses a `combine()`‑shaped `@bind` widget (two `<input>`s feeding one
-> bound value). **WasmTarget can't compile that to WebAssembly yet**, so Snapshot
-> publishes it as a **static snapshot** and labels it `limited` in the sidebar.
+> This notebook has **two** `@bind` widgets:
+> 1. a plain **slider** that compiles fine — drag it below and it recomputes live;
+> 2. a `combine()`‑shaped widget (two `<input>`s → one value) that **WasmTarget can't
+>    compile to WebAssembly yet**, so that cell is published as a static snapshot with a
+>    clear "not interactive in this export" note.
 >
-> It's here on purpose — a live marker of the current edge of what compiles. The bound
-> cell below shows its default value with a clear "not interactive in this export" note,
-> instead of pretending to work.
+> Interactivity is judged **per cell**, so a single unsupported widget doesn't sink the
+> rest. Because *something* fell back, the sidebar labels the whole notebook `limited`.
 """
+
+# ╔═╡ bb000008-0000-4000-8000-000000000008
+md"### ✅ A working slider (compiles to WebAssembly)"
+
+# ╔═╡ bb000005-0000-4000-8000-000000000005
+begin
+	struct TinySlider
+		max
+	end
+	Base.show(io::IO, ::MIME"text/html", s::TinySlider) = write(io, "<input type=range value=1 min=1 max=$(s.max)>")
+	Bonds.initial_value(::TinySlider) = 1
+	Bonds.possible_values(s::TinySlider) = 1:s.max
+end
+
+# ╔═╡ bb000006-0000-4000-8000-000000000006
+@bind k TinySlider(12)
+
+# ╔═╡ bb000007-0000-4000-8000-000000000007
+md"`k` = **$(k)**, and `k²` = **$(k^2)** — this updates as you drag."
+
+# ╔═╡ bb000009-0000-4000-8000-000000000009
+md"### ⚠️ A `combine()`-shaped widget (not supported yet)"
 
 # ╔═╡ bb000001-0000-4000-8000-000000000001
 import AbstractPlutoDingetjes.Bonds
@@ -81,7 +104,12 @@ version = "1.4.0"
 
 # ╔═╡ Cell order:
 # ╟─bb000000-0000-4000-8000-000000000000
-# ╠═bb000001-0000-4000-8000-000000000001
+# ╟─bb000008-0000-4000-8000-000000000008
+# ╟─bb000005-0000-4000-8000-000000000005
+# ╠═bb000006-0000-4000-8000-000000000006
+# ╠═bb000007-0000-4000-8000-000000000007
+# ╟─bb000009-0000-4000-8000-000000000009
+# ╟─bb000001-0000-4000-8000-000000000001
 # ╠═bb000002-0000-4000-8000-000000000002
 # ╠═bb000003-0000-4000-8000-000000000003
 # ╠═bb000004-0000-4000-8000-000000000004
