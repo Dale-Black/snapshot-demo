@@ -79,27 +79,52 @@ jobs:
         with: { repository: GroupTherapyOrg/WasmTarget.jl, ref: "${{ env.SNAPSHOT_WT_REF }}", path: WasmTarget.jl }
       - uses: actions/checkout@v4
         with: { repository: GroupTherapyOrg/PlutoIslands.jl, ref: "${{ env.SNAPSHOT_PI_REF }}", path: PlutoIslands.jl }
-      - uses: julia-actions/setup-julia@v2
+      # ── per-notebook export cache: key = notebook source hash + the engine
+      # commit SHAs + optimize level. A cache HIT means this notebook's source AND
+      # the compiler are unchanged since it was last built → restore its <slug>/ and
+      # skip Julia entirely (no instantiate, no compile). Only CHANGED notebooks pay
+      # the compile cost; everything else is a seconds-long restore.
+      - id: keys
+        name: Compute cache key parts (engine SHAs)
+        run: |
+          echo "wt=$(git -C WasmTarget.jl rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "pi=$(git -C PlutoIslands.jl rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - id: cache
+        uses: actions/cache@v4
+        with:
+          path: _stage/${{ matrix.nb.slug }}
+          key: snap-nb-v1-${{ matrix.nb.slug }}-${{ hashFiles(format('repo/{0}', matrix.nb.notebook)) }}-wt${{ steps.keys.outputs.wt }}-pi${{ steps.keys.outputs.pi }}-${{ env.SNAPSHOT_OPTIMIZE }}
+      - if: steps.cache.outputs.cache-hit != 'true'
+        uses: julia-actions/setup-julia@v2
         with: { version: "1.12" }
-      - uses: julia-actions/cache@v2          # RESTORES the warmed depot — no re-precompile
-      - uses: actions/setup-node@v4
+      - if: steps.cache.outputs.cache-hit != 'true'
+        uses: julia-actions/cache@v2          # RESTORES the warmed depot — no re-precompile
+      - if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/setup-node@v4
         with: { node-version: "22" }
-      - name: Install Binaryen (wasm-opt, wasm-merge)
+      - if: steps.cache.outputs.cache-hit != 'true'
+        name: Install Binaryen (wasm-opt, wasm-merge)
         run: |
           curl -fsSL "https://github.com/WebAssembly/binaryen/releases/download/${BINARYEN_VERSION}/binaryen-${BINARYEN_VERSION}-x86_64-linux.tar.gz" | tar -xz
           echo "$PWD/binaryen-${BINARYEN_VERSION}/bin" >> "$GITHUB_PATH"
-      - name: Install wasm-tools
+      - if: steps.cache.outputs.cache-hit != 'true'
+        name: Install wasm-tools
         run: |
           curl -fsSL "https://github.com/bytecodealliance/wasm-tools/releases/download/v${WASMTOOLS_VERSION}/wasm-tools-${WASMTOOLS_VERSION}-x86_64-linux.tar.gz" | tar -xz
           echo "$PWD/wasm-tools-${WASMTOOLS_VERSION}-x86_64-linux" >> "$GITHUB_PATH"
-      - name: Instantiate (restored cache → fast)
+      - if: steps.cache.outputs.cache-hit != 'true'
+        name: Instantiate (restored cache → fast)
         run: julia --project=PlutoIslands.jl -e 'using Pkg; Pkg.instantiate()'
-      - name: Fetch Snapshot driver + collection builder
+      - if: steps.cache.outputs.cache-hit != 'true'
+        name: Fetch Snapshot driver + collection builder
         run: |
           curl -fsSL "${SNAPSHOT_INGEST_URL%/}/ci/export.jl" -o export.jl
           curl -fsSL "${SNAPSHOT_INGEST_URL%/}/ci/collection.jl" -o collection.jl
-      - name: Export ${{ matrix.nb.slug }}
+      - if: steps.cache.outputs.cache-hit != 'true'
+        name: Export ${{ matrix.nb.slug }}
         run: julia --project=PlutoIslands.jl export.jl one repo _stage "${{ matrix.nb.slug }}" "${{ matrix.nb.notebook }}"
+      - name: Cache status
+        run: echo "${{ matrix.nb.slug }} cache-hit=${{ steps.cache.outputs.cache-hit || 'false' }}"
       - uses: actions/upload-artifact@v4
         with:
           name: nb-${{ matrix.nb.slug }}
