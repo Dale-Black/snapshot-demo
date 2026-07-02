@@ -1,7 +1,7 @@
 #!/usr/bin/env julia
-# Snapshot v0 — island export driver. Runs inside the PlutoIslands.jl project.
+# Snapshot v0 — island export driver. Runs inside the Snapshot.jl project.
 #
-#   julia --project=PlutoIslands.jl export.jl <repo_dir> <stage_dir> [notebook ...]
+#   julia --project=Snapshot.jl export.jl <repo_dir> <stage_dir> [notebook ...]
 #
 # Compiles each Pluto notebook found in <repo_dir> to a self-contained WasmGC
 # island bundle (<name>.html + <name>.islands/) under <stage_dir>/<slug>/, and
@@ -9,7 +9,7 @@
 # cell-level coverage. Per-notebook failures are recorded, not fatal — the run
 # only fails if EVERY notebook fails.
 
-using PlutoIslands
+using Snapshot
 using JSON
 using Dates
 
